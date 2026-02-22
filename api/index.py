@@ -1,45 +1,59 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-import json, numpy as np, os
+import json
+import os
 
-app = FastAPI()
+def build_response(status, body_dict):
+    return {
+        "statusCode": status,
+        "headers": {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "*"
+        },
+        "body": json.dumps(body_dict)
+    }
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+def handler(request):
+    if request.method == "OPTIONS":
+        return build_response(200, {})
 
-file_path = os.path.join(os.path.dirname(__file__), "q-vercel-latency.json")
+    if request.method != "POST":
+        return build_response(405, {"detail": "Method Not Allowed"})
 
-with open(file_path) as f:
-    data = json.load(f)
+    body = json.loads(request.body)
+    regions = body["regions"]
+    threshold = body["threshold_ms"]
 
-@app.api_route("/", methods=["POST", "OPTIONS"])
-async def analyze(payload: dict = None):
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    file_path = os.path.join(BASE_DIR, "q-vercel-latency.json")
 
-    # If it's OPTIONS, just return empty 200 response
-    if payload is None:
-        return {}
+    with open(file_path) as f:
+        telemetry = json.load(f)
 
-    regions = payload.get("regions", [])
-    threshold = payload.get("threshold_ms", 180)
+    def percentile(data, percent):
+        data = sorted(data)
+        k = (len(data)-1) * percent / 100
+        f = int(k)
+        c = f + 1
+        if c >= len(data):
+            return data[f]
+        return data[f] + (k-f)*(data[c]-data[f])
 
-    results = {}
+    result = {}
 
     for region in regions:
-        region_data = [r for r in data if r["region"] == region]
+        records = [r for r in telemetry if r["region"] == region]
+        if not records:
+            continue
 
-        latencies = [r["latency_ms"] for r in region_data]
-        uptimes = [r["uptime_pct"] for r in region_data]
+        latencies = [r["latency_ms"] for r in records]
+        uptimes = [r["uptime"] for r in records]
 
-        results[region] = {
-            "avg_latency": float(np.mean(latencies)),
-            "p95_latency": float(np.percentile(latencies, 95)),
-            "avg_uptime": float(np.mean(uptimes)),
-            "breaches": sum(1 for l in latencies if l > threshold),
+        result[region] = {
+            "avg_latency": sum(latencies)/len(latencies),
+            "p95_latency": percentile(latencies, 95),
+            "avg_uptime": sum(uptimes)/len(uptimes),
+            "breaches": sum(1 for l in latencies if l > threshold)
         }
 
-    return results
+    return build_response(200, result)
