@@ -1,19 +1,10 @@
-from fastapi import FastAPI, Response
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 import json
 import numpy as np
 import os
 
 app = FastAPI()
-
-# Basic CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Load JSON file
 file_path = os.path.join(os.path.dirname(__file__), "q-vercel-latency.json")
@@ -21,16 +12,21 @@ file_path = os.path.join(os.path.dirname(__file__), "q-vercel-latency.json")
 with open(file_path) as f:
     data = json.load(f)
 
+# Handle preflight OPTIONS request
 @app.options("/")
-async def options_handler(response: Response):
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "*"
-    return {}
+async def options_handler():
+    return JSONResponse(
+        content={},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "*"
+        }
+    )
 
 @app.post("/")
-async def analyze(payload: dict, response: Response):
-    response.headers["Access-Control-Allow-Origin"] = "*"
+async def analyze(request: Request):
+    payload = await request.json()
 
     regions = payload.get("regions", [])
     threshold = payload.get("threshold_ms", 180)
@@ -53,4 +49,9 @@ async def analyze(payload: dict, response: Response):
             "breaches": sum(1 for l in latencies if l > threshold),
         }
 
-    return results
+    return JSONResponse(
+        content=results,
+        headers={
+            "Access-Control-Allow-Origin": "*"
+        }
+    )
