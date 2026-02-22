@@ -12,20 +12,21 @@ file_path = os.path.join(os.path.dirname(__file__), "q-vercel-latency.json")
 with open(file_path) as f:
     data = json.load(f)
 
-# Handle preflight OPTIONS request
-@app.options("/")
-async def options_handler():
-    return JSONResponse(
-        content={},
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers": "*"
-        }
-    )
+@app.api_route("/", methods=["POST", "OPTIONS"])
+async def handle(request: Request):
+    
+    # Handle preflight request
+    if request.method == "OPTIONS":
+        return JSONResponse(
+            content={},
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*"
+            }
+        )
 
-@app.post("/")
-async def analyze(request: Request):
+    # Handle POST request
     payload = await request.json()
 
     regions = payload.get("regions", [])
