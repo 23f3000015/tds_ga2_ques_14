@@ -16,7 +16,7 @@ app.add_middleware(
 )
 
 # Load JSON safely (important for Vercel)
-file_path = os.path.join(os.path.dirname(__file__), "..", "q-vercel-latency.json")
+file_path = os.path.join(os.path.dirname(__file__), "q-vercel-latency.json")
 
 with open(file_path) as f:
     data = json.load(f)
