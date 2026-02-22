@@ -5,15 +5,8 @@ import numpy as np
 import os
 
 app = FastAPI()
-
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"], expose_headers=["*"])
 # Enable CORS for POST from any origin
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Load JSON file (must be inside api folder)
 file_path = os.path.join(os.path.dirname(__file__), "q-vercel-latency.json")
