@@ -17,8 +17,12 @@ file_path = os.path.join(os.path.dirname(__file__), "q-vercel-latency.json")
 with open(file_path) as f:
     data = json.load(f)
 
-@app.post("/")
-async def analyze(payload: dict):
+@app.api_route("/", methods=["POST", "OPTIONS"])
+async def analyze(payload: dict = None):
+
+    # If it's OPTIONS, just return empty 200 response
+    if payload is None:
+        return {}
 
     regions = payload.get("regions", [])
     threshold = payload.get("threshold_ms", 180)
