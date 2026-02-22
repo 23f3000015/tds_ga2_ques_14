@@ -1,75 +1,47 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 import json
+import numpy as np
 import os
 
-def handler(request):
+app = FastAPI()
 
-    headers = {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "*"
-    }
+# Enable CORS for POST from any origin
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-    # Handle CORS preflight
-    if request.method == "OPTIONS":
-        return {
-            "statusCode": 200,
-            "headers": headers,
-            "body": "{}"
-        }
+# Load JSON file (must be inside api folder)
+file_path = os.path.join(os.path.dirname(__file__), "q-vercel-latency.json")
 
-    if request.method != "POST":
-        return {
-            "statusCode": 405,
-            "headers": headers,
-            "body": json.dumps({"detail": "Method Not Allowed"})
-        }
+with open(file_path) as f:
+    data = json.load(f)
 
-    try:
-        body = json.loads(request.body.decode())
-        regions = body["regions"]
-        threshold = body["threshold_ms"]
-    except Exception:
-        return {
-            "statusCode": 400,
-            "headers": headers,
-            "body": json.dumps({"error": "Invalid JSON"})
-        }
+@app.post("/")
+async def analyze(payload: dict):
+    regions = payload.get("regions", [])
+    threshold = payload.get("threshold_ms", 180)
 
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    file_path = os.path.join(BASE_DIR, "q-vercel-latency.json")
-
-    with open(file_path) as f:
-        telemetry = json.load(f)
-
-    def percentile(data, percent):
-        data = sorted(data)
-        k = (len(data)-1) * percent / 100
-        f = int(k)
-        c = f + 1
-        if c >= len(data):
-            return data[f]
-        return data[f] + (k-f)*(data[c]-data[f])
-
-    result = {}
+    results = {}
 
     for region in regions:
-        records = [r for r in telemetry if r["region"] == region]
-        if not records:
+        region_data = [r for r in data if r["region"] == region]
+
+        if not region_data:
             continue
 
-        latencies = [r["latency_ms"] for r in records]
-        uptimes = [r["uptime"] for r in records]
+        latencies = [r["latency_ms"] for r in region_data]
+        uptimes = [r["uptime_pct"] for r in region_data]
 
-        result[region] = {
-            "avg_latency": sum(latencies)/len(latencies),
-            "p95_latency": percentile(latencies, 95),
-            "avg_uptime": sum(uptimes)/len(uptimes),
-            "breaches": sum(1 for l in latencies if l > threshold)
+        results[region] = {
+            "avg_latency": float(np.mean(latencies)),
+            "p95_latency": float(np.percentile(latencies, 95)),
+            "avg_uptime": float(np.mean(uptimes)),
+            "breaches": sum(1 for l in latencies if l > threshold),
         }
 
-    return {
-        "statusCode": 200,
-        "headers": headers,
-        "body": json.dumps(result)
-    }
+    return results
