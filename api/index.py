@@ -37,4 +37,6 @@ async def analyze(payload: dict):
             "breaches": sum(1 for l in latencies if l > threshold),
         }
 
-    return results
+    return {
+    "regions": results
+}
